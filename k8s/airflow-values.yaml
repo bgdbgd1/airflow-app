@@ -1,0 +1,37 @@
+# Values for the official apache-airflow/airflow Helm chart.
+# Placeholders (AIRFLOW_IMAGE, PROCESSOR_IMAGE, RAW_BUCKET, ...) are filled by gke_setup.sh.
+executor: KubernetesExecutor   # every Airflow task runs in its own pod
+
+images:
+  airflow:
+    repository: AIRFLOW_IMAGE_REPO
+    tag: AIRFLOW_IMAGE_TAG
+    pullPolicy: Always
+
+dags:
+  persistence: { enabled: false }   # DAGs are baked into the image
+  gitSync: { enabled: false }
+
+env:
+  - { name: PIPELINE_MODE, value: k8s }
+  - { name: RAW_URI, value: "gs://RAW_BUCKET" }
+  - { name: PUBLISHED_URI, value: "gs://PUBLISHED_BUCKET" }
+  - { name: PROCESSOR_IMAGE, value: "PROCESSOR_IMAGE_FULL" }
+  - { name: K8S_NAMESPACE, value: airflow }
+  - { name: PROCESSOR_KSA, value: pipeline-sa }
+  - { name: AIRFLOW__CORE__LOAD_EXAMPLES, value: "False" }
+
+secret:
+  - envName: WAREHOUSE_DSN
+    secretName: warehouse-db
+    secretKey: WAREHOUSE_DSN
+
+# Workload Identity so Airflow tasks (generate/publish/archive) can use GCS.
+workers:
+  serviceAccount:
+    annotations: { iam.gke.io/gcp-service-account: GSA_EMAIL }
+scheduler:
+  serviceAccount:
+    annotations: { iam.gke.io/gcp-service-account: GSA_EMAIL }
+
+webserverSecretKeySecretName: airflow-webserver-secret
