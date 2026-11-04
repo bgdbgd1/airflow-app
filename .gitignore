@@ -1,5 +1,7 @@
 logs/
-data/
+data/**/*.csv
+k8s/kubeconfig.yaml   # generated per-machine, contains cluster credentials
+k8s/kind-config.yaml  # generated per-machine, contains absolute host paths
 __pycache__/
 *.pyc
 .venv/
