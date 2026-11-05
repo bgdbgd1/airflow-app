@@ -1,0 +1,19 @@
+# kind cluster configuration template.
+#
+# Generate the real file with:
+#   sed "s|/Users/boganene/airflow-app/data|$HOME/airflow-app/data|g" \
+#     k8s/kind-config.yaml.example > k8s/kind-config.yaml
+#
+# Then create the cluster:
+#   kind create cluster --name airflow-local --config k8s/kind-config.yaml
+#
+# extraMounts: makes ~/airflow-app/data available inside kind nodes at /data.
+# Job pods mount /data as a hostPath volume to read the incoming CSV files.
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: /Users/boganene/airflow-app/data
+        containerPath: /data

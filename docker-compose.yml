@@ -1,0 +1,87 @@
+# Local Airflow stack. Job pods run in a separate kind (local Kubernetes) cluster.
+# The application database lives inside kind, not here — pods reach it via
+# Kubernetes DNS. To inspect data from your machine: kubectl port-forward svc/app-db 5433:5432
+#
+# Start:   docker compose up -d --build
+# UI:      http://localhost:8080
+
+x-airflow-common: &airflow-common
+  build: .          # see Dockerfile — adds the Kubernetes provider on top of the official image
+  user: "50000:0"
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: local-dev-secret
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    # Tells the Kubernetes client where to find cluster credentials.
+    KUBECONFIG: /home/airflow/.kube/config
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./data:/opt/airflow/data
+    # The kubeconfig gives Airflow permission to create pods in the kind cluster.
+    # Generate this file first (see Step 4 instructions) — it must exist before
+    # running docker compose up, otherwise Docker will create a directory here.
+    - ./k8s/kubeconfig.yaml:/home/airflow/.kube/config:ro
+
+services:
+
+  # ── Airflow metadata database ──────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+
+  # ── Airflow components ─────────────────────────────────────────────────────
+
+  airflow-init:
+    <<: *airflow-common
+    command: db migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  airflow-db:

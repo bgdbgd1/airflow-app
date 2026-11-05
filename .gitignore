@@ -5,3 +5,4 @@ k8s/kind-config.yaml  # generated per-machine, contains absolute host paths
 __pycache__/
 *.pyc
 .venv/
+.idea
